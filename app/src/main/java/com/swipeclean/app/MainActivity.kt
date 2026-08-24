@@ -4168,6 +4168,10 @@ fun PhotoSwipeScreen(
         mutableFloatStateOf(0f)
     }
 
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
+    }
+
     var isFullscreen by remember {
         mutableStateOf(false)
     }
@@ -4523,6 +4527,13 @@ fun PhotoSwipeScreen(
 
                             change.consume()
                             offsetX += dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -4578,7 +4589,13 @@ fun PhotoSwipeScreen(
                         .height(380.dp)
                         .background(Color.Black)
                         .clickable {
-                            isFullscreen = true
+
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+                                isFullscreen = true
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -4736,7 +4753,7 @@ fun PhotoSwipeScreen(
         )
 
         Text(
-            text = "Testing mode — nothing will be deleted.",
+            text = "Review mode — nothing will be deleted.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -4872,6 +4889,10 @@ fun EverythingSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var previewItem by remember {
@@ -5645,6 +5666,13 @@ fun EverythingSwipeScreen(
 
                             offsetX +=
                                 dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -5699,26 +5727,32 @@ fun EverythingSwipeScreen(
                         )
                         .clickable {
 
-                            when (
-                                currentItem.kind
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
                             ) {
 
-                                EverythingKind.APP -> {
+                                when (
+                                    currentItem.kind
+                                ) {
 
-                                    openInstalledApp(
-                                        context =
-                                            context,
-                                        packageName =
+                                    EverythingKind.APP -> {
+
+                                        openInstalledApp(
+                                            context =
+                                                context,
+                                            packageName =
+                                                currentItem
+                                                    .app!!
+                                                    .packageName
+                                        )
+                                    }
+
+                                    else -> {
+
+                                        previewItem =
                                             currentItem
-                                                .app!!
-                                                .packageName
-                                    )
-                                }
-
-                                else -> {
-
-                                    previewItem =
-                                        currentItem
+                                    }
                                 }
                             }
                         },
@@ -5913,7 +5947,7 @@ fun EverythingSwipeScreen(
 
         Text(
             text =
-                "Testing mode — nothing will be deleted or uninstalled.",
+                "Swipe left to send items to Trash. Permanent removal happens only from Trash.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -6374,7 +6408,7 @@ fun EverythingFinishedScreen(
 
         Text(
             text =
-                "Testing mode: nothing has been deleted or uninstalled.",
+                "Nothing is permanently removed until you confirm Empty Trash.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign =
@@ -6535,6 +6569,10 @@ fun AppsSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var scanVersion by remember {
@@ -6851,6 +6889,13 @@ fun AppsSwipeScreen(
 
                             offsetX +=
                                 dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -6931,11 +6976,17 @@ fun AppsSwipeScreen(
                         )
                         .clickable {
 
-                            openInstalledApp(
-                                context,
-                                currentApp
-                                    .packageName
-                            )
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+
+                                openInstalledApp(
+                                    context,
+                                    currentApp
+                                        .packageName
+                                )
+                            }
                         },
                     contentAlignment =
                         Alignment.Center
@@ -7202,7 +7253,7 @@ fun AppsSwipeScreen(
 
         Text(
             text =
-                "Testing mode — no apps will be uninstalled.",
+                "Swipe left to send apps to Trash. Uninstalling requires Android confirmation.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -7390,7 +7441,7 @@ fun AppFinishedScreen(
 
         Text(
             text =
-                "Testing mode: no apps have been uninstalled.",
+                "No apps are uninstalled until you confirm them from Trash.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign =
@@ -7529,6 +7580,10 @@ fun FileSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var previewFile by remember {
@@ -8003,6 +8058,13 @@ fun FileSwipeScreen(
                             change.consume()
                             offsetX +=
                                 dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -8078,8 +8140,14 @@ fun FileSwipeScreen(
                         )
                         .clickable {
 
-                            previewFile =
-                                currentFile
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+
+                                previewFile =
+                                    currentFile
+                            }
                         },
                     contentAlignment =
                         Alignment.Center
@@ -8310,7 +8378,7 @@ fun FileSwipeScreen(
 
         Text(
             text =
-                "Testing mode — nothing will be deleted.",
+                "Review mode — nothing will be deleted.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -9925,7 +9993,7 @@ fun FileFinishedScreen(
 
         Text(
             text =
-                "Testing mode: no files have been deleted.",
+                "Review mode: no files have been deleted.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center
@@ -10063,6 +10131,10 @@ fun AudioSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var isFullscreen by remember {
@@ -10420,6 +10492,13 @@ fun AudioSwipeScreen(
 
                             change.consume()
                             offsetX += dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -10475,7 +10554,13 @@ fun AudioSwipeScreen(
                         .height(380.dp)
                         .background(Color(0xFF171717))
                         .clickable {
-                            isFullscreen = true
+
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+                                isFullscreen = true
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -10667,7 +10752,7 @@ fun AudioSwipeScreen(
         )
 
         Text(
-            text = "Testing mode — nothing will be deleted.",
+            text = "Review mode — nothing will be deleted.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -10946,7 +11031,7 @@ fun FullscreenAudioViewer(
             )
 
             Text(
-                text = "Testing mode — nothing will be deleted.",
+                text = "Review mode — nothing will be deleted.",
                 color = Color.LightGray,
                 fontSize = 12.sp
             )
@@ -11121,7 +11206,7 @@ fun AudioFinishedScreen(
         )
 
         Text(
-            text = "Testing mode: no audio has been deleted.",
+            text = "Review mode: no audio has been deleted.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center
@@ -11255,6 +11340,10 @@ fun ScreenshotSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var isFullscreen by remember {
@@ -11612,6 +11701,13 @@ fun ScreenshotSwipeScreen(
 
                             change.consume()
                             offsetX += dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -11667,7 +11763,13 @@ fun ScreenshotSwipeScreen(
                         .height(380.dp)
                         .background(Color.Black)
                         .clickable {
-                            isFullscreen = true
+
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+                                isFullscreen = true
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -11825,7 +11927,7 @@ fun ScreenshotSwipeScreen(
         )
 
         Text(
-            text = "Testing mode — nothing will be deleted.",
+            text = "Review mode — nothing will be deleted.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -11998,7 +12100,7 @@ fun ScreenshotFinishedScreen(
         )
 
         Text(
-            text = "Testing mode: no screenshots have been deleted.",
+            text = "Review mode: no screenshots have been deleted.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center
@@ -12129,6 +12231,10 @@ fun VideoSwipeScreen(
 
     var offsetX by remember {
         mutableFloatStateOf(0f)
+    }
+
+    var suppressPreviewTapUntil by remember {
+        mutableLongStateOf(0L)
     }
 
     var isFullscreen by remember {
@@ -12486,6 +12592,13 @@ fun VideoSwipeScreen(
 
                             change.consume()
                             offsetX += dragAmount.x
+
+                            if (
+                                kotlin.math.abs(offsetX) > 12f
+                            ) {
+                                suppressPreviewTapUntil =
+                                    System.currentTimeMillis() + 500L
+                            }
                         },
 
                         onDragEnd = {
@@ -12541,7 +12654,13 @@ fun VideoSwipeScreen(
                         .height(380.dp)
                         .background(Color.Black)
                         .clickable {
-                            isFullscreen = true
+
+                            if (
+                                System.currentTimeMillis() >=
+                                suppressPreviewTapUntil
+                            ) {
+                                isFullscreen = true
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -12725,7 +12844,7 @@ fun VideoSwipeScreen(
         )
 
         Text(
-            text = "Testing mode — nothing will be deleted.",
+            text = "Review mode — nothing will be deleted.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -13079,7 +13198,7 @@ fun FullscreenPhotoViewer(
             )
 
             Text(
-                text = "Testing mode — nothing will be deleted.",
+                text = "Review mode — nothing will be deleted.",
                 color = Color.LightGray,
                 fontSize = 12.sp
             )
@@ -13368,7 +13487,7 @@ fun FullscreenVideoViewer(
             )
 
             Text(
-                text = "Testing mode — nothing will be deleted.",
+                text = "Review mode — nothing will be deleted.",
                 color = Color.LightGray,
                 fontSize = 12.sp
             )
@@ -13617,7 +13736,7 @@ fun VideoFinishedScreen(
         )
 
         Text(
-            text = "Testing mode: no videos have been deleted.",
+            text = "Review mode: no videos have been deleted.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center
@@ -13957,7 +14076,7 @@ fun FinishedScreen(
         )
 
         Text(
-            text = "Testing mode: no files have been deleted.",
+            text = "Review mode: no files have been deleted.",
             fontSize = 15.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center
