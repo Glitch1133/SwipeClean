@@ -106,6 +106,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -391,6 +393,9 @@ fun SwipeCleanApp(
         (AppThemeMode) -> Unit
 ) {
 
+    val context =
+        LocalContext.current
+
     var currentScreen by remember {
         mutableStateOf(AppScreen.HOME)
     }
@@ -401,7 +406,25 @@ fun SwipeCleanApp(
 
     var trashScopes by remember {
         mutableStateOf<Map<String, List<TrashItem>>>(
-            emptyMap()
+            loadTrashScopes(
+                context
+            )
+        )
+    }
+
+    fun setTrashScopes(
+        updatedScopes:
+        Map<String, List<TrashItem>>
+    ) {
+
+        trashScopes =
+            updatedScopes
+
+        saveTrashScopes(
+            context =
+                context,
+            trashScopes =
+                updatedScopes
         )
     }
 
@@ -432,7 +455,7 @@ fun SwipeCleanApp(
                     it.key
                 }
 
-        trashScopes =
+        setTrashScopes(
             trashScopes
                 .toMutableMap()
                 .apply {
@@ -443,13 +466,14 @@ fun SwipeCleanApp(
                         this[scope] = updated
                     }
                 }
+        )
     }
 
     fun restoreTrashItem(
         key: String
     ) {
 
-        trashScopes =
+        setTrashScopes(
             trashScopes
                 .mapValues {
                         (_, items) ->
@@ -461,22 +485,27 @@ fun SwipeCleanApp(
                 .filterValues {
                     it.isNotEmpty()
                 }
+        )
     }
 
     fun restoreAllTrash() {
-        trashScopes = emptyMap()
+
+        setTrashScopes(
+            emptyMap()
+        )
     }
 
     fun permanentlyRemoveTrashKeys(
         keys: Set<String>
     ) {
         if (keys.isEmpty()) return
-        trashScopes =
+        setTrashScopes(
             trashScopes
                 .mapValues { (_, scopeItems) ->
                     scopeItems.filterNot { it.key in keys }
                 }
                 .filterValues { it.isNotEmpty() }
+        )
     }
 
     when (currentScreen) {
@@ -534,6 +563,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -553,6 +584,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -572,6 +605,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -591,6 +626,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -610,6 +647,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -630,6 +669,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -650,6 +691,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -670,6 +713,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -689,6 +734,8 @@ fun SwipeCleanApp(
                 onBack = {
                     currentScreen = AppScreen.HOME
                 },
+                trashedItems =
+                    trashItems,
                 onTrashDelta = {
                         scope,
                         added,
@@ -3245,6 +3292,138 @@ fun EverythingItem.toTrashItem(): TrashItem {
     }
 }
 
+fun trashItemIsMediaLike(
+    item: TrashItem
+): Boolean {
+
+    return when (item.kind) {
+
+        TrashKind.PHOTO,
+        TrashKind.VIDEO,
+        TrashKind.AUDIO ->
+            true
+
+        TrashKind.FILE -> {
+
+            val file =
+                item.file
+                    ?: return false
+
+            when (
+                inAppPreviewType(
+                    file
+                )
+            ) {
+
+                InAppPreviewType.IMAGE,
+                InAppPreviewType.VIDEO,
+                InAppPreviewType.AUDIO ->
+                    true
+
+                else ->
+                    false
+            }
+        }
+
+        TrashKind.APP ->
+            false
+    }
+}
+
+fun isMarkedForTrash(
+    candidate: TrashItem,
+    trashedItems:
+    List<TrashItem>
+): Boolean {
+
+    if (trashedItems.isEmpty()) {
+        return false
+    }
+
+    if (
+        trashedItems.any {
+            it.key == candidate.key
+        }
+    ) {
+        return true
+    }
+
+    if (candidate.kind == TrashKind.APP) {
+
+        val packageName =
+            candidate.app
+                ?.packageName
+                ?: return false
+
+        return trashedItems.any {
+                trashed ->
+
+            trashed.kind ==
+                    TrashKind.APP &&
+                    trashed.app
+                        ?.packageName ==
+                    packageName
+        }
+    }
+
+    val candidatePath =
+        candidate.file
+            ?.absolutePath
+            ?.takeIf {
+                it.isNotBlank()
+            }
+            ?.let {
+                everythingCanonicalPath(it)
+            }
+
+    if (candidatePath != null) {
+
+        val samePath =
+            trashedItems.any {
+                    trashed ->
+
+                trashed.file
+                    ?.absolutePath
+                    ?.takeIf {
+                        it.isNotBlank()
+                    }
+                    ?.let {
+                        everythingCanonicalPath(it)
+                    } ==
+                        candidatePath
+            }
+
+        if (samePath) {
+            return true
+        }
+    }
+
+    if (
+        !trashItemIsMediaLike(candidate) ||
+        candidate.sizeBytes <= 0L
+    ) {
+        return false
+    }
+
+    val mediaKey =
+        everythingMediaDedupKey(
+            candidate.name,
+            candidate.sizeBytes
+        )
+
+    return trashedItems.any {
+            trashed ->
+
+        trashItemIsMediaLike(trashed) &&
+                trashed.sizeBytes > 0L &&
+                everythingMediaDedupKey(
+                    trashed.name,
+                    trashed.sizeBytes
+                ) ==
+                mediaKey
+    }
+}
+
 @Composable
 fun SettingsScreen(
     themeMode: AppThemeMode,
@@ -3923,6 +4102,750 @@ fun deletionPhaseText(phase: DeletePhase): String {
     }
 }
 
+private const val TRASH_PREFERENCES_NAME =
+    "swipeclean_trash"
+
+private const val TRASH_PREFERENCES_KEY =
+    "trash_scopes_json"
+
+fun saveTrashScopes(
+    context: Context,
+    trashScopes:
+    Map<String, List<TrashItem>>
+) {
+
+    try {
+
+        val scopesArray =
+            JSONArray()
+
+        trashScopes
+            .forEach {
+                    (scope, items) ->
+
+                val scopeObject =
+                    JSONObject()
+
+                scopeObject.put(
+                    "scope",
+                    scope
+                )
+
+                val itemsArray =
+                    JSONArray()
+
+                items.forEach {
+                        item ->
+
+                    itemsArray.put(
+                        trashItemToJson(
+                            item
+                        )
+                    )
+                }
+
+                scopeObject.put(
+                    "items",
+                    itemsArray
+                )
+
+                scopesArray.put(
+                    scopeObject
+                )
+            }
+
+        context
+            .getSharedPreferences(
+                TRASH_PREFERENCES_NAME,
+                Context.MODE_PRIVATE
+            )
+            .edit()
+            .putString(
+                TRASH_PREFERENCES_KEY,
+                scopesArray.toString()
+            )
+            .apply()
+
+    } catch (
+        _: Exception
+    ) {
+    }
+}
+
+fun loadTrashScopes(
+    context: Context
+): Map<String, List<TrashItem>> {
+
+    val savedJson =
+        context
+            .getSharedPreferences(
+                TRASH_PREFERENCES_NAME,
+                Context.MODE_PRIVATE
+            )
+            .getString(
+                TRASH_PREFERENCES_KEY,
+                null
+            )
+            ?: return emptyMap()
+
+    return try {
+
+        val scopesArray =
+            JSONArray(
+                savedJson
+            )
+
+        val result =
+            linkedMapOf<
+                    String,
+                    List<TrashItem>
+                    >()
+
+        for (
+        scopeIndex in
+        0 until scopesArray.length()
+        ) {
+
+            val scopeObject =
+                scopesArray
+                    .optJSONObject(
+                        scopeIndex
+                    )
+                    ?: continue
+
+            val scope =
+                scopeObject
+                    .optString(
+                        "scope",
+                        ""
+                    )
+                    .trim()
+
+            if (
+                scope.isBlank()
+            ) {
+                continue
+            }
+
+            val itemsArray =
+                scopeObject
+                    .optJSONArray(
+                        "items"
+                    )
+                    ?: JSONArray()
+
+            val items =
+                mutableListOf<
+                        TrashItem
+                        >()
+
+            for (
+            itemIndex in
+            0 until itemsArray.length()
+            ) {
+
+                val itemObject =
+                    itemsArray
+                        .optJSONObject(
+                            itemIndex
+                        )
+                        ?: continue
+
+                trashItemFromJson(
+                    itemObject
+                )
+                    ?.let {
+                        items.add(
+                            it
+                        )
+                    }
+            }
+
+            if (
+                items.isNotEmpty()
+            ) {
+
+                result[scope] =
+                    items
+                        .distinctBy {
+                            it.key
+                        }
+            }
+        }
+
+        result
+
+    } catch (
+        _: Exception
+    ) {
+
+        emptyMap()
+    }
+}
+
+fun trashItemToJson(
+    item: TrashItem
+): JSONObject {
+
+    val json =
+        JSONObject()
+
+    json.put(
+        "key",
+        item.key
+    )
+
+    json.put(
+        "kind",
+        item.kind.name
+    )
+
+    json.put(
+        "name",
+        item.name
+    )
+
+    json.put(
+        "sizeBytes",
+        item.sizeBytes
+    )
+
+    when (
+        item.kind
+    ) {
+
+        TrashKind.PHOTO -> {
+
+            val photo =
+                item.photo
+
+            if (
+                photo != null
+            ) {
+
+                json.put(
+                    "id",
+                    photo.id
+                )
+
+                json.put(
+                    "uri",
+                    photo.uri.toString()
+                )
+
+                json.put(
+                    "dateAdded",
+                    photo.dateAdded
+                )
+            }
+        }
+
+        TrashKind.VIDEO -> {
+
+            val video =
+                item.video
+
+            if (
+                video != null
+            ) {
+
+                json.put(
+                    "id",
+                    video.id
+                )
+
+                json.put(
+                    "uri",
+                    video.uri.toString()
+                )
+
+                json.put(
+                    "dateAdded",
+                    video.dateAdded
+                )
+
+                json.put(
+                    "durationMs",
+                    video.durationMs
+                )
+            }
+        }
+
+        TrashKind.AUDIO -> {
+
+            val audio =
+                item.audio
+
+            if (
+                audio != null
+            ) {
+
+                json.put(
+                    "id",
+                    audio.id
+                )
+
+                json.put(
+                    "uri",
+                    audio.uri.toString()
+                )
+
+                json.put(
+                    "dateAdded",
+                    audio.dateAdded
+                )
+
+                json.put(
+                    "durationMs",
+                    audio.durationMs
+                )
+
+                putNullableJsonString(
+                    json =
+                        json,
+                    key =
+                        "mimeType",
+                    value =
+                        audio.mimeType
+                )
+            }
+        }
+
+        TrashKind.FILE -> {
+
+            val file =
+                item.file
+
+            if (
+                file != null
+            ) {
+
+                json.put(
+                    "id",
+                    file.id
+                )
+
+                json.put(
+                    "uri",
+                    file.uri.toString()
+                )
+
+                json.put(
+                    "dateAdded",
+                    file.dateAdded
+                )
+
+                putNullableJsonString(
+                    json =
+                        json,
+                    key =
+                        "mimeType",
+                    value =
+                        file.mimeType
+                )
+
+                putNullableJsonString(
+                    json =
+                        json,
+                    key =
+                        "relativePath",
+                    value =
+                        file.relativePath
+                )
+
+                json.put(
+                    "extension",
+                    file.extension
+                )
+
+                json.put(
+                    "absolutePath",
+                    file.absolutePath
+                )
+            }
+        }
+
+        TrashKind.APP -> {
+
+            val app =
+                item.app
+
+            if (
+                app != null
+            ) {
+
+                json.put(
+                    "packageName",
+                    app.packageName
+                )
+
+                json.put(
+                    "versionName",
+                    app.versionName
+                )
+
+                json.put(
+                    "firstInstallTime",
+                    app.firstInstallTime
+                )
+
+                json.put(
+                    "lastUsedTime",
+                    app.lastUsedTime
+                )
+            }
+        }
+    }
+
+    return json
+}
+
+fun trashItemFromJson(
+    json: JSONObject
+): TrashItem? {
+
+    return try {
+
+        val key =
+            json.getString(
+                "key"
+            )
+
+        val kind =
+            TrashKind.valueOf(
+                json.getString(
+                    "kind"
+                )
+            )
+
+        val name =
+            json.optString(
+                "name",
+                "Unknown"
+            )
+
+        val sizeBytes =
+            json.optLong(
+                "sizeBytes",
+                0L
+            )
+
+        when (
+            kind
+        ) {
+
+            TrashKind.PHOTO -> {
+
+                val uri =
+                    Uri.parse(
+                        json.getString(
+                            "uri"
+                        )
+                    )
+
+                val photo =
+                    PhotoItem(
+                        id =
+                            json.optLong(
+                                "id",
+                                0L
+                            ),
+                        uri =
+                            uri,
+                        name =
+                            name,
+                        size =
+                            sizeBytes,
+                        dateAdded =
+                            json.optLong(
+                                "dateAdded",
+                                0L
+                            )
+                    )
+
+                TrashItem(
+                    key =
+                        key,
+                    kind =
+                        kind,
+                    name =
+                        name,
+                    sizeBytes =
+                        sizeBytes,
+                    photo =
+                        photo
+                )
+            }
+
+            TrashKind.VIDEO -> {
+
+                val uri =
+                    Uri.parse(
+                        json.getString(
+                            "uri"
+                        )
+                    )
+
+                val video =
+                    VideoItem(
+                        id =
+                            json.optLong(
+                                "id",
+                                0L
+                            ),
+                        uri =
+                            uri,
+                        name =
+                            name,
+                        size =
+                            sizeBytes,
+                        dateAdded =
+                            json.optLong(
+                                "dateAdded",
+                                0L
+                            ),
+                        durationMs =
+                            json.optLong(
+                                "durationMs",
+                                0L
+                            )
+                    )
+
+                TrashItem(
+                    key =
+                        key,
+                    kind =
+                        kind,
+                    name =
+                        name,
+                    sizeBytes =
+                        sizeBytes,
+                    video =
+                        video
+                )
+            }
+
+            TrashKind.AUDIO -> {
+
+                val uri =
+                    Uri.parse(
+                        json.getString(
+                            "uri"
+                        )
+                    )
+
+                val audio =
+                    AudioItem(
+                        id =
+                            json.optLong(
+                                "id",
+                                0L
+                            ),
+                        uri =
+                            uri,
+                        name =
+                            name,
+                        size =
+                            sizeBytes,
+                        dateAdded =
+                            json.optLong(
+                                "dateAdded",
+                                0L
+                            ),
+                        durationMs =
+                            json.optLong(
+                                "durationMs",
+                                0L
+                            ),
+                        mimeType =
+                            optionalJsonString(
+                                json =
+                                    json,
+                                key =
+                                    "mimeType"
+                            )
+                    )
+
+                TrashItem(
+                    key =
+                        key,
+                    kind =
+                        kind,
+                    name =
+                        name,
+                    sizeBytes =
+                        sizeBytes,
+                    audio =
+                        audio
+                )
+            }
+
+            TrashKind.FILE -> {
+
+                val uri =
+                    Uri.parse(
+                        json.getString(
+                            "uri"
+                        )
+                    )
+
+                val file =
+                    FileItem(
+                        id =
+                            json.optLong(
+                                "id",
+                                0L
+                            ),
+                        uri =
+                            uri,
+                        name =
+                            name,
+                        size =
+                            sizeBytes,
+                        dateAdded =
+                            json.optLong(
+                                "dateAdded",
+                                0L
+                            ),
+                        mimeType =
+                            optionalJsonString(
+                                json =
+                                    json,
+                                key =
+                                    "mimeType"
+                            ),
+                        relativePath =
+                            optionalJsonString(
+                                json =
+                                    json,
+                                key =
+                                    "relativePath"
+                            ),
+                        extension =
+                            json.optString(
+                                "extension",
+                                ""
+                            ),
+                        absolutePath =
+                            json.optString(
+                                "absolutePath",
+                                ""
+                            )
+                    )
+
+                TrashItem(
+                    key =
+                        key,
+                    kind =
+                        kind,
+                    name =
+                        name,
+                    sizeBytes =
+                        sizeBytes,
+                    file =
+                        file
+                )
+            }
+
+            TrashKind.APP -> {
+
+                val app =
+                    AppItem(
+                        packageName =
+                            json.getString(
+                                "packageName"
+                            ),
+                        name =
+                            name,
+                        versionName =
+                            json.optString(
+                                "versionName",
+                                ""
+                            ),
+                        sizeBytes =
+                            sizeBytes,
+                        firstInstallTime =
+                            json.optLong(
+                                "firstInstallTime",
+                                0L
+                            ),
+                        lastUsedTime =
+                            json.optLong(
+                                "lastUsedTime",
+                                0L
+                            )
+                    )
+
+                TrashItem(
+                    key =
+                        key,
+                    kind =
+                        kind,
+                    name =
+                        name,
+                    sizeBytes =
+                        sizeBytes,
+                    app =
+                        app
+                )
+            }
+        }
+
+    } catch (
+        _: Exception
+    ) {
+
+        null
+    }
+}
+
+fun putNullableJsonString(
+    json: JSONObject,
+    key: String,
+    value: String?
+) {
+
+    if (
+        value == null
+    ) {
+
+        json.put(
+            key,
+            JSONObject.NULL
+        )
+
+    } else {
+
+        json.put(
+            key,
+            value
+        )
+    }
+}
+
+fun optionalJsonString(
+    json: JSONObject,
+    key: String
+): String? {
+
+    if (
+        !json.has(
+            key
+        ) ||
+        json.isNull(
+            key
+        )
+    ) {
+
+        return null
+    }
+
+    return json.optString(
+        key,
+        null
+    )
+}
+
 fun loadThemeMode(
     context: Context
 ): AppThemeMode {
@@ -4076,6 +4999,8 @@ fun PlaceholderCategoryScreen(
 @Composable
 fun PhotoSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -4208,12 +5133,26 @@ fun PhotoSwipeScreen(
                     loadPhotos(context)
                 }
 
+                val reviewablePhotos =
+                    loadedPhotos.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingPhotos = sortPhotos(
-                    loadedPhotos,
+                    reviewablePhotos,
                     sortMode
                 )
 
                 keptPhotos = emptyList()
+
+                previousTrashPhotoKeys =
+                    emptySet()
+
                 removalPhotos = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -4292,11 +5231,15 @@ fun PhotoSwipeScreen(
             onRestart = {
 
                 remainingPhotos = sortPhotos(
-                    keptPhotos + removalPhotos,
+                    keptPhotos,
                     sortMode
                 )
 
                 keptPhotos = emptyList()
+
+                previousTrashPhotoKeys =
+                    emptySet()
+
                 removalPhotos = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -4767,6 +5710,8 @@ fun PhotoSwipeScreen(
 @Composable
 fun EverythingSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -4986,14 +5931,27 @@ fun EverythingSwipeScreen(
                         )
                     }
 
+                val reviewableItems =
+                    loadedItems.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingItems =
                     sortEverythingItems(
-                        loadedItems,
+                        reviewableItems,
                         sortMode
                     )
 
                 keptItems =
                     emptyList()
+
+                previousEverythingTrashKeys =
+                    emptySet()
 
                 removalItems =
                     emptyList()
@@ -5203,13 +6161,15 @@ fun EverythingSwipeScreen(
 
                 remainingItems =
                     sortEverythingItems(
-                        keptItems +
-                                removalItems,
+                        keptItems,
                         sortMode
                     )
 
                 keptItems =
                     emptyList()
+
+                previousEverythingTrashKeys =
+                    emptySet()
 
                 removalItems =
                     emptyList()
@@ -5235,6 +6195,9 @@ fun EverythingSwipeScreen(
         ) {
             return
         }
+
+        val wasPreviewing =
+            previewItem != null
 
         val lastDecision =
             history.last()
@@ -5263,12 +6226,16 @@ fun EverythingSwipeScreen(
 
         previewItem =
             if (
-                lastDecision.item.kind ==
+                wasPreviewing &&
+                lastDecision.item.kind !=
                 EverythingKind.APP
             ) {
-                null
-            } else {
+
                 lastDecision.item
+
+            } else {
+
+                null
             }
 
         offsetX = 0f
@@ -5281,6 +6248,9 @@ fun EverythingSwipeScreen(
         ) {
             return
         }
+
+        val wasPreviewing =
+            previewItem != null
 
         val activeItem =
             remainingItems.first()
@@ -5304,12 +6274,19 @@ fun EverythingSwipeScreen(
             nextItems
 
         previewItem =
-            nextItems
-                .firstOrNull()
-                ?.takeIf {
-                    it.kind !=
-                            EverythingKind.APP
-                }
+            if (wasPreviewing) {
+
+                nextItems
+                    .firstOrNull()
+                    ?.takeIf {
+                        it.kind !=
+                                EverythingKind.APP
+                    }
+
+            } else {
+
+                null
+            }
 
         offsetX = 0f
     }
@@ -5321,6 +6298,9 @@ fun EverythingSwipeScreen(
         ) {
             return
         }
+
+        val wasPreviewing =
+            previewItem != null
 
         val activeItem =
             remainingItems.first()
@@ -5344,12 +6324,19 @@ fun EverythingSwipeScreen(
             nextItems
 
         previewItem =
-            nextItems
-                .firstOrNull()
-                ?.takeIf {
-                    it.kind !=
-                            EverythingKind.APP
-                }
+            if (wasPreviewing) {
+
+                nextItems
+                    .firstOrNull()
+                    ?.takeIf {
+                        it.kind !=
+                                EverythingKind.APP
+                    }
+
+            } else {
+
+                null
+            }
 
         offsetX = 0f
     }
@@ -6462,6 +7449,8 @@ fun EverythingFinishedScreen(
 @Composable
 fun AppsSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -6611,13 +7600,27 @@ fun AppsSwipeScreen(
                     )
                 }
 
+            val reviewableApps =
+                loaded.filterNot {
+                    isMarkedForTrash(
+                        candidate =
+                            it.toTrashItem(),
+                        trashedItems =
+                            trashedItems
+                    )
+                }
+
             remainingApps =
                 sortApps(
-                    loaded,
+                    reviewableApps,
                     sortMode
                 )
 
             keptApps = emptyList()
+
+            previousAppTrashKeys =
+                emptySet()
+
             removalApps = emptyList()
             history = emptyList()
             offsetX = 0f
@@ -6685,12 +7688,15 @@ fun AppsSwipeScreen(
 
                 remainingApps =
                     sortApps(
-                        keptApps +
-                                removalApps,
+                        keptApps,
                         sortMode
                     )
 
                 keptApps = emptyList()
+
+                previousAppTrashKeys =
+                    emptySet()
+
                 removalApps = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -7490,6 +8496,8 @@ fun AppFinishedScreen(
 fun FileSwipeScreen(
     category: FileCategory,
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -7643,13 +8651,27 @@ fun FileSwipeScreen(
                         )
                     }
 
+                val reviewableFiles =
+                    loadedFiles.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingFiles =
                     sortFiles(
-                        loadedFiles,
+                        reviewableFiles,
                         sortMode
                     )
 
                 keptFiles = emptyList()
+
+                previousFileTrashKeys =
+                    emptySet()
+
                 removalFiles = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -7770,11 +8792,15 @@ fun FileSwipeScreen(
 
                 remainingFiles =
                     sortFiles(
-                        keptFiles + removalFiles,
+                        keptFiles,
                         sortMode
                     )
 
                 keptFiles = emptyList()
+
+                previousFileTrashKeys =
+                    emptySet()
+
                 removalFiles = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -10041,6 +11067,8 @@ fun FileFinishedScreen(
 @Composable
 fun AudioSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -10173,12 +11201,26 @@ fun AudioSwipeScreen(
                     loadAudio(context)
                 }
 
+                val reviewableAudio =
+                    loadedAudio.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingAudio = sortAudio(
-                    loadedAudio,
+                    reviewableAudio,
                     sortMode
                 )
 
                 keptAudio = emptyList()
+
+                previousAudioTrashKeys =
+                    emptySet()
+
                 removalAudio = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -10257,11 +11299,15 @@ fun AudioSwipeScreen(
             onRestart = {
 
                 remainingAudio = sortAudio(
-                    keptAudio + removalAudio,
+                    keptAudio,
                     sortMode
                 )
 
                 keptAudio = emptyList()
+
+                previousAudioTrashKeys =
+                    emptySet()
+
                 removalAudio = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -11250,6 +12296,8 @@ fun AudioFinishedScreen(
 @Composable
 fun ScreenshotSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -11382,12 +12430,26 @@ fun ScreenshotSwipeScreen(
                     loadScreenshots(context)
                 }
 
+                val reviewableScreenshots =
+                    loadedScreenshots.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingScreenshots = sortPhotos(
-                    loadedScreenshots,
+                    reviewableScreenshots,
                     sortMode
                 )
 
                 keptScreenshots = emptyList()
+
+                previousScreenshotTrashKeys =
+                    emptySet()
+
                 removalScreenshots = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -11466,11 +12528,15 @@ fun ScreenshotSwipeScreen(
             onRestart = {
 
                 remainingScreenshots = sortPhotos(
-                    keptScreenshots + removalScreenshots,
+                    keptScreenshots,
                     sortMode
                 )
 
                 keptScreenshots = emptyList()
+
+                previousScreenshotTrashKeys =
+                    emptySet()
+
                 removalScreenshots = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -12141,6 +13207,8 @@ fun ScreenshotFinishedScreen(
 @Composable
 fun VideoSwipeScreen(
     onBack: () -> Unit,
+    trashedItems:
+    List<TrashItem>,
     onTrashDelta:
         (String, List<TrashItem>, Set<String>) -> Unit
 ) {
@@ -12273,12 +13341,26 @@ fun VideoSwipeScreen(
                     loadVideos(context)
                 }
 
+                val reviewableVideos =
+                    loadedVideos.filterNot {
+                        isMarkedForTrash(
+                            candidate =
+                                it.toTrashItem(),
+                            trashedItems =
+                                trashedItems
+                        )
+                    }
+
                 remainingVideos = sortVideos(
-                    loadedVideos,
+                    reviewableVideos,
                     sortMode
                 )
 
                 keptVideos = emptyList()
+
+                previousVideoTrashKeys =
+                    emptySet()
+
                 removalVideos = emptyList()
                 history = emptyList()
                 offsetX = 0f
@@ -12357,11 +13439,15 @@ fun VideoSwipeScreen(
             onRestart = {
 
                 remainingVideos = sortVideos(
-                    keptVideos + removalVideos,
+                    keptVideos,
                     sortMode
                 )
 
                 keptVideos = emptyList()
+
+                previousVideoTrashKeys =
+                    emptySet()
+
                 removalVideos = emptyList()
                 history = emptyList()
                 offsetX = 0f
