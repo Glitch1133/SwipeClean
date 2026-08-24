@@ -1,0 +1,36 @@
+# Android Studio
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Kotlin
+.kotlin/
+
+# Local Android SDK path
+local.properties
+
+# Generated apps
+*.apk
+*.aab
+
+# Signing keys - NEVER upload these
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# Native build files
+.externalNativeBuild/
+.cxx/
+
+# Android Studio captures
+captures/
+
+# Windows / macOS junk
+Thumbs.db
+.DS_Store
